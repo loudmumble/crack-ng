@@ -20,8 +20,8 @@ pub fn discover_wordlists() -> Vec<WordlistInfo> {
         scan_directory(dir, &mut wordlists);
     }
 
-    // Deduplicate by canonical path
-    wordlists.sort_by(|a, b| a.size_bytes.cmp(&b.size_bytes));
+    // Sort largest-first so cascade stages get the most comprehensive wordlist
+    wordlists.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
     dedup_by_path(&mut wordlists);
 
     wordlists
@@ -42,7 +42,7 @@ fn build_search_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-fn scan_directory(dir: &PathBuf, wordlists: &mut Vec<WordlistInfo>) {
+fn scan_directory(dir: &std::path::Path, wordlists: &mut Vec<WordlistInfo>) {
     // Look for known wordlist names directly
     let known_names = [
         "rockyou.txt",

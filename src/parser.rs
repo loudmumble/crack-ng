@@ -90,11 +90,15 @@ pub fn detect_format(content: &str) -> InputFormat {
     }
 
     // Check for Responder format: user::domain:challenge:hash:blob
+    // Validate that parts[3] (server challenge) is exactly 16 hex characters.
     let responder_count = sample_lines
         .iter()
         .filter(|line| {
             let parts: Vec<&str> = line.split(':').collect();
-            parts.len() >= 6 && parts[1].is_empty()
+            parts.len() >= 6
+                && parts[1].is_empty()
+                && parts[3].len() == 16
+                && parts[3].chars().all(|c| c.is_ascii_hexdigit())
         })
         .count();
     if responder_count > sample_lines.len() / 2 {

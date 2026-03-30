@@ -227,6 +227,7 @@ dependencies = [
  "glob",
  "home",
  "lazy_static",
+ "libc",
  "ratatui",
  "regex",
  "serde",

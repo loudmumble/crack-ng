@@ -73,15 +73,15 @@ pub fn build_default_cascade(wordlists: &[WordlistInfo], rules: &[PathBuf]) -> C
 }
 
 /// Insert dynamically-generated masks from cracked password analysis into an
-/// existing cascade config. Merges them into any existing MaskAttack stage,
-/// or appends a new MaskAttack stage before the brute-force stage.
-pub fn inject_dynamic_masks(config: &mut CascadeConfig, masks: Vec<String>) {
+/// existing cascade config. Only modifies stages AFTER `after_stage_idx` to avoid
+/// injecting into already-executed stages.
+pub fn inject_dynamic_masks(config: &mut CascadeConfig, masks: Vec<String>, after_stage_idx: usize) {
     if masks.is_empty() {
         return;
     }
 
-    // Try to find an existing MaskAttack stage and extend it
-    for stage in &mut config.stages {
+    // Try to find an existing MaskAttack stage AFTER the current position
+    for stage in config.stages.iter_mut().skip(after_stage_idx + 1) {
         if let CascadeStage::MaskAttack { masks: existing } = stage {
             for m in &masks {
                 if !existing.contains(m) {
@@ -92,11 +92,13 @@ pub fn inject_dynamic_masks(config: &mut CascadeConfig, masks: Vec<String>) {
         }
     }
 
-    // No existing mask stage found -- insert before brute force
+    // No future mask stage found -- insert after current stage (before brute force if possible)
     let insert_pos = config
         .stages
         .iter()
+        .skip(after_stage_idx + 1)
         .position(|s| matches!(s, CascadeStage::IncrementalBrute { .. }))
+        .map(|p| p + after_stage_idx + 1)
         .unwrap_or(config.stages.len());
 
     config

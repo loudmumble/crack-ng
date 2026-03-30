@@ -3,15 +3,18 @@ use std::collections::HashMap;
 /// Analyze a set of cracked passwords and return the most common hashcat mask
 /// patterns, suitable for feeding into a MaskAttack cascade stage.
 pub fn analyze_cracked_passwords(passwords: &[String]) -> Vec<String> {
+    // Filter to ASCII-only passwords; hashcat masks are ASCII-only
+    let ascii_passwords: Vec<&String> = passwords.iter().filter(|p| p.is_ascii()).collect();
+
     let mut mask_counts: HashMap<String, usize> = HashMap::new();
 
-    for pw in passwords {
+    for pw in &ascii_passwords {
         let mask = password_to_mask(pw);
         *mask_counts.entry(mask).or_insert(0) += 1;
     }
 
     // Generate smart structural masks from observed patterns
-    let structural_masks = generate_structural_masks(passwords);
+    let structural_masks = generate_structural_masks(&ascii_passwords);
     for m in &structural_masks {
         mask_counts.entry(m.clone()).or_insert(1);
     }
@@ -45,7 +48,7 @@ fn password_to_mask(password: &str) -> String {
 
 /// Generate "smart" masks based on common password construction patterns
 /// observed in the cracked set.
-fn generate_structural_masks(passwords: &[String]) -> Vec<String> {
+fn generate_structural_masks(passwords: &[&String]) -> Vec<String> {
     let mut extra_masks = Vec::new();
 
     for pw in passwords {
@@ -57,7 +60,7 @@ fn generate_structural_masks(passwords: &[String]) -> Vec<String> {
                 // Ucfirst word (4-8 chars) + 4 digits + optional special
                 for word_len in 4..=8 {
                     let word_mask: String = std::iter::once("?u")
-                        .chain(std::iter::repeat("?l").take(word_len - 1))
+                        .chain(std::iter::repeat_n("?l", word_len - 1))
                         .collect::<Vec<_>>()
                         .join("");
                     extra_masks.push(format!("{}?d?d?d?d", word_mask));
@@ -69,12 +72,12 @@ fn generate_structural_masks(passwords: &[String]) -> Vec<String> {
                 let alpha_len = pw.chars().take_while(|c| c.is_ascii_alphabetic()).count();
                 if alpha_len >= 3 {
                     let word_mask: String = std::iter::once("?u")
-                        .chain(std::iter::repeat("?l").take(alpha_len - 1))
+                        .chain(std::iter::repeat_n("?l", alpha_len - 1))
                         .collect::<Vec<_>>()
                         .join("");
                     for d in 1..=4 {
                         let digits: String =
-                            std::iter::repeat("?d").take(d).collect::<Vec<_>>().join("");
+                            std::iter::repeat_n("?d", d).collect::<Vec<_>>().join("");
                         extra_masks.push(format!("{}{}", word_mask, digits));
                     }
                 }

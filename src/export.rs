@@ -1,11 +1,8 @@
 use crate::state::ExportRecord;
 use anyhow::Result;
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path};
 
-pub fn export_results(path: &PathBuf, recovered: &[ExportRecord]) -> Result<()> {
-    if recovered.is_empty() {
-        return Ok(());
-    }
+pub fn export_results(path: &Path, recovered: &[ExportRecord]) -> Result<()> {
     if path.extension().unwrap_or_default() == "json" {
         fs::write(path, serde_json::to_string_pretty(recovered)?)?;
     } else {
@@ -15,6 +12,12 @@ pub fn export_results(path: &PathBuf, recovered: &[ExportRecord]) -> Result<()> 
             wtr.write_record([&r.timestamp, &r.algo, &r.hash, &r.plaintext])?;
         }
         wtr.flush()?;
+    }
+    // Restrict permissions -- exports contain cracked credentials
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
     }
     Ok(())
 }

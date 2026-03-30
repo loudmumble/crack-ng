@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -21,10 +22,9 @@ pub fn read_potfiles() -> Vec<PotfileEntry> {
         read_potfile_colon_format(&john_pot, &mut entries);
     }
 
-    // Also check common system paths
+    // Check system-level potfile (avoid world-writable paths like /tmp)
     let system_paths = [
         PathBuf::from("/usr/share/hashcat/hashcat.potfile"),
-        PathBuf::from("/tmp/hashcat.potfile"),
     ];
     for path in &system_paths {
         read_potfile_colon_format(path, &mut entries);
@@ -37,24 +37,30 @@ pub fn read_potfiles() -> Vec<PotfileEntry> {
 }
 
 fn read_potfile_colon_format(path: &Path, entries: &mut HashMap<String, String>) {
-    if let Ok(content) = fs::read_to_string(path) {
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
+    let file = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    for line in BufReader::new(file).lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        let line = line.trim().to_string();
+        if line.is_empty() {
+            continue;
+        }
 
-            // Potfile format: hash:plaintext
-            // For hashes containing ':', we split on the LAST ':'
-            // JtR format can be: $format$hash:plaintext or user:hash:plaintext
-            if let Some(sep_pos) = line.rfind(':') {
-                let hash_part = &line[..sep_pos];
-                let plain_part = &line[sep_pos + 1..];
-                if !hash_part.is_empty() {
-                    entries
-                        .entry(hash_part.to_string())
-                        .or_insert_with(|| plain_part.to_string());
-                }
+        // Potfile format: hash:plaintext
+        // For hashes containing ':', we split on the LAST ':'
+        // JtR format can be: $format$hash:plaintext or user:hash:plaintext
+        if let Some(sep_pos) = line.rfind(':') {
+            let hash_part = &line[..sep_pos];
+            let plain_part = &line[sep_pos + 1..];
+            if !hash_part.is_empty() {
+                entries
+                    .entry(hash_part.to_string())
+                    .or_insert_with(|| plain_part.to_string());
             }
         }
     }

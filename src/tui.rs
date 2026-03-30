@@ -1,7 +1,6 @@
 use crate::state::{CrackState, ExportRecord};
 use crate::session::get_session_dir;
 use crate::export::export_results;
-use crate::report;
 use ratatui::{
     widgets::{Block, Borders, Paragraph, List, ListItem, Clear, BorderType, Table, Row, Tabs},
     layout::{Layout, Constraint, Direction, Rect, Alignment},
@@ -17,6 +16,16 @@ use crossterm::{
 use anyhow::Result;
 use std::{fs, path::PathBuf};
 use chrono::Local;
+
+fn format_duration_short(secs: i64) -> String {
+    if secs < 60 {
+        format!("{}s ", secs)
+    } else if secs < 3600 {
+        format!("{}m{}s ", secs / 60, secs % 60)
+    } else {
+        format!("{}h{}m ", secs / 3600, (secs % 3600) / 60)
+    }
+}
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -37,10 +46,10 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
         .split(size);
 
     let session_txt = if let Some(sn) = session_name { format!(" [Session: {}] ", sn) } else { " [Ephemeral Session] ".to_string() };
-    let titles = vec![" [1] Live Dashboard ", " [2] Job Queue ", " [3] Recovered ", " [4] Report ", " [5] Wordlists "];
+    let titles = [" [1] Dashboard ", " [2] Jobs ", " [3] Recovered ", " [4] Report ", " [5] Strategy "];
     let tabs = Tabs::new(titles.iter().cloned().map(Line::from).collect::<Vec<_>>())
         .select(s.active_tab)
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(format!(" crack-ng v2.0 - Ultimate Orchestrator{} ", session_txt)).title_alignment(Alignment::Center))
+        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(format!(" crack-ng v1.0.0{} ", session_txt)).title_alignment(Alignment::Center))
         .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
         .divider(Span::raw("|"));
     f.render_widget(tabs, chunks[0]);
@@ -49,7 +58,7 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
         0 => {
             let dash_chunks = Layout::default().direction(Direction::Horizontal).constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref()).split(chunks[1]);
 
-            let log_lines: Vec<ListItem> = s.log.iter().map(|l| {
+            let log_lines: Vec<ListItem> = s.log.iter().rev().map(|l| {
                 if l.contains("Error") || l.contains("Warning") || l.contains("[!]") { ListItem::new(l.clone()).style(Style::default().fg(Color::Red)) }
                 else if l.starts_with("[+]") { ListItem::new(l.clone()).style(Style::default().fg(Color::Green)) }
                 else { ListItem::new(l.clone()).style(Style::default().fg(Color::DarkGray)) }
@@ -57,27 +66,39 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
             let log_list = List::new(log_lines).block(Block::default().title(" Event Stream ").borders(Borders::ALL).border_type(BorderType::Rounded));
             f.render_widget(log_list, dash_chunks[0]);
 
-            let mut active_job_txt = vec![Line::from(vec![Span::styled("Overall Status: ", Style::default().fg(Color::DarkGray)), Span::styled(&s.overall_status, Style::default().fg(if s.overall_status == "Finished" {Color::Green} else {Color::Cyan}))])];
+            let status_color = if s.overall_status == "Finished" { Color::Green } else if s.is_paused { Color::Yellow } else { Color::Cyan };
+            let mut active_job_txt = vec![Line::from(vec![Span::styled("Overall Status: ", Style::default().fg(Color::DarkGray)), Span::styled(&s.overall_status, Style::default().fg(status_color))])];
 
             let uptime = if let Some(start) = s.start_time {
-                let diff = Local::now().timestamp() - start;
+                let end = s.end_time.unwrap_or_else(|| Local::now().timestamp());
+                let diff = end - start;
                 format!("{:02}:{:02}:{:02}", diff / 3600, (diff % 3600) / 60, diff % 60)
             } else { "00:00:00".to_string() };
             active_job_txt.push(Line::from(vec![Span::styled("Uptime:         ", Style::default().fg(Color::DarkGray)), Span::raw(uptime)]));
             active_job_txt.push(Line::from(""));
 
             if let Some(idx) = s.active_job_idx {
-                let j = &s.jobs[idx];
-                active_job_txt.push(Line::from(vec![Span::styled("Active Algo: ", Style::default().fg(Color::DarkGray)), Span::styled(&j.algo_name, Style::default().fg(Color::Magenta))]));
-                active_job_txt.push(Line::from(vec![Span::styled("Engine:      ", Style::default().fg(Color::DarkGray)), Span::styled(&j.engine_used, Style::default().fg(Color::LightBlue))]));
-                active_job_txt.push(Line::from(vec![Span::styled("Job Status:  ", Style::default().fg(Color::DarkGray)), Span::styled(&j.status, Style::default().fg(Color::Yellow))]));
-                active_job_txt.push(Line::from(vec![Span::styled("Speed:       ", Style::default().fg(Color::DarkGray)), Span::raw(&j.speed)]));
+                if let Some(j) = s.jobs.get(idx) {
+                    active_job_txt.push(Line::from(vec![Span::styled("Active Algo: ", Style::default().fg(Color::DarkGray)), Span::styled(&j.algo_name, Style::default().fg(Color::Magenta))]));
+                    active_job_txt.push(Line::from(vec![Span::styled("Engine:      ", Style::default().fg(Color::DarkGray)), Span::styled(&j.engine_used, Style::default().fg(Color::LightBlue))]));
+                    active_job_txt.push(Line::from(vec![Span::styled("Job Status:  ", Style::default().fg(Color::DarkGray)), Span::styled(&j.status, Style::default().fg(Color::Yellow))]));
+                    active_job_txt.push(Line::from(vec![Span::styled("Speed:       ", Style::default().fg(Color::DarkGray)), Span::raw(&j.speed)]));
+                    if j.eta != "-" {
+                        active_job_txt.push(Line::from(vec![Span::styled("ETA:         ", Style::default().fg(Color::DarkGray)), Span::raw(&j.eta)]));
+                    }
 
-                let pct = if j.total_hashes > 0 { (j.cracked as f64 / j.total_hashes as f64) * 100.0 } else { 0.0 };
-                active_job_txt.push(Line::from(vec![Span::styled("Job Cracked: ", Style::default().fg(Color::DarkGray)), Span::raw(format!("{}/{} ({:.1}%)", j.cracked, j.total_hashes, pct))]));
-                active_job_txt.push(Line::from(vec![Span::styled("Temp File:   ", Style::default().fg(Color::DarkGray)), Span::raw(&j.hash_file_path)]));
+                    let pct = if j.total_hashes > 0 { (j.cracked as f64 / j.total_hashes as f64) * 100.0 } else { 0.0 };
+                    active_job_txt.push(Line::from(vec![Span::styled("Job Cracked: ", Style::default().fg(Color::DarkGray)), Span::raw(format!("{}/{} ({:.1}%)", j.cracked, j.total_hashes, pct))]));
+                    active_job_txt.push(Line::from(vec![Span::styled("Temp File:   ", Style::default().fg(Color::DarkGray)), Span::raw(&j.hash_file_path)]));
+                } else {
+                    active_job_txt.push(Line::from("No active job running."));
+                }
             } else {
                 active_job_txt.push(Line::from("No active job running."));
+            }
+            if let Some(stage) = &s.cascade_stage {
+                active_job_txt.push(Line::from(""));
+                active_job_txt.push(Line::from(vec![Span::styled("Cascade:     ", Style::default().fg(Color::DarkGray)), Span::styled(stage, Style::default().fg(Color::Magenta))]));
             }
             active_job_txt.push(Line::from(""));
             active_job_txt.push(Line::from(vec![Span::styled("Global Recovered: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)), Span::styled(format!("{}", s.recovered.len()), Style::default().fg(Color::Green))]));
@@ -88,6 +109,15 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
         1 => {
             let rows: Vec<Row> = s.jobs.iter().map(|j| {
                 let pct = if j.total_hashes > 0 { (j.cracked as f64 / j.total_hashes as f64) * 100.0 } else { 0.0 };
+                let style = if j.status == "Cracking" || j.status.starts_with("Cascade:") {
+                    Style::default().fg(Color::Yellow)
+                } else if j.status == "Complete" {
+                    Style::default().fg(Color::Green)
+                } else if j.status == "Exhausted" || j.status.contains("Skipped") {
+                    Style::default().fg(Color::DarkGray)
+                } else {
+                    Style::default()
+                };
                 Row::new(vec![
                     j.algo_name.clone(),
                     j.engine_used.clone(),
@@ -95,11 +125,12 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
                     format!("{:.1}%", pct),
                     j.status.clone(),
                     j.speed.clone(),
-                ]).style(if j.status == "Cracking" { Style::default().fg(Color::Yellow) } else if j.status == "Complete" { Style::default().fg(Color::Green) } else if j.status == "Exhausted" || j.status.contains("Skipped") { Style::default().fg(Color::DarkGray) } else { Style::default() })
+                    j.eta.clone(),
+                ]).style(style)
             }).collect();
-            let widths = [Constraint::Percentage(25), Constraint::Percentage(15), Constraint::Percentage(15), Constraint::Percentage(15), Constraint::Percentage(15), Constraint::Percentage(15)];
+            let widths = [Constraint::Percentage(22), Constraint::Percentage(13), Constraint::Percentage(10), Constraint::Percentage(10), Constraint::Percentage(15), Constraint::Percentage(17), Constraint::Percentage(13)];
             let table = Table::new(rows, widths)
-                .header(Row::new(vec!["Algorithm", "Engine", "Total Hashes", "Cracked", "Status", "Speed"]).style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
+                .header(Row::new(vec!["Algorithm", "Engine", "Hashes", "Cracked", "Status", "Speed", "ETA"]).style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
                 .block(Block::default().title(format!(" Batch Queue ({} Jobs) ", s.jobs.len())).borders(Borders::ALL).border_type(BorderType::Rounded));
             f.render_widget(table, chunks[1]);
         },
@@ -145,37 +176,125 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
             f.render_widget(table, content_area);
         },
         3 => {
-            let rpt = report::generate_report(s);
-            let mut text = report::render_text(&rpt);
-            if s.overall_status != "Finished" {
-                text.insert_str(0, &format!("[Cascade still running: {}]\n\n", s.cascade_stage.as_deref().unwrap_or(&s.overall_status)));
-            }
+            let text = if let Some((_, cached)) = &s.cached_report_text {
+                let mut t = cached.clone();
+                if s.overall_status != "Finished" {
+                    let status_label = if let Some(stage) = &s.cascade_stage {
+                        format!("[Cascade running: {}]", stage)
+                    } else {
+                        format!("[Status: {}]", s.overall_status)
+                    };
+                    t.insert_str(0, &format!("{}\n\n", status_label));
+                }
+                t
+            } else {
+                "Waiting for data...".to_string()
+            };
             let paragraph = Paragraph::new(text)
                 .block(Block::default().title(" Post-Crack Analysis ").borders(Borders::ALL).border_type(BorderType::Rounded))
                 .style(Style::default().fg(Color::White));
             f.render_widget(paragraph, chunks[1]);
         },
         4 => {
-            if s.discovered_wordlists.is_empty() {
-                let msg = Paragraph::new("No wordlists discovered. Use --cascade or --discover-wordlists to scan.")
-                    .block(Block::default().title(" Discovered Wordlists ").borders(Borders::ALL).border_type(BorderType::Rounded))
-                    .style(Style::default().fg(Color::DarkGray));
+            if s.cascade_plan.is_empty() {
+                let msg = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from(Span::styled("  No cascade strategy active.", Style::default().fg(Color::DarkGray))),
+                    Line::from(""),
+                    Line::from("  Use --cascade to enable the smart multi-stage attack pipeline:"),
+                    Line::from(Span::styled("    crack-ng hashes.txt --cascade", Style::default().fg(Color::Cyan))),
+                    Line::from(""),
+                    Line::from("  The cascade automatically sequences: potfile recovery, wordlist attacks"),
+                    Line::from("  with rules, mask patterns derived from cracked passwords, and finally"),
+                    Line::from("  incremental brute force -- skipping stages when all hashes are cracked."),
+                ])
+                    .block(Block::default().title(" Cascade Strategy ").borders(Borders::ALL).border_type(BorderType::Rounded));
                 f.render_widget(msg, chunks[1]);
             } else {
-                let rows: Vec<Row> = s.discovered_wordlists.iter().map(|entry| {
-                    Row::new(vec![entry.clone()]).style(Style::default().fg(Color::Cyan))
+                let current_stage_num = s.cascade_stage.as_ref()
+                    .and_then(|cs| cs.split('/').next())
+                    .and_then(|s| s.trim_start_matches("Stage ").parse::<usize>().ok());
+
+                // Get attack progress and compute stage-level ETA
+                let (attacks_done, attacks_total, last_completion_ts) = s.stage_attack_progress;
+                let current_attack_eta = s.active_job_idx
+                    .and_then(|idx| s.jobs.get(idx))
+                    .map(|j| j.eta_seconds)
+                    .unwrap_or(0);
+
+                let rows: Vec<Row> = s.cascade_plan.iter().enumerate().map(|(i, entry)| {
+                    let is_current = current_stage_num.is_some_and(|n| n == i + 1);
+                    let is_done = current_stage_num.is_some_and(|n| i + 1 < n)
+                        || (s.overall_status == "Finished" && i < s.cascade_plan.len());
+                    let indicator = if is_current && s.overall_status != "Finished" {
+                        "> "
+                    } else {
+                        "  "
+                    };
+
+                    // Build timing suffix
+                    let timing = if let Some((start, end)) = s.stage_times.get(i) {
+                        if *start > 0 {
+                            if let Some(end_ts) = end {
+                                // Completed stage: show elapsed
+                                let elapsed = end_ts - start;
+                                format!("  ({})", format_duration_short(elapsed))
+                            } else if is_current && s.overall_status != "Finished" {
+                                let elapsed = Local::now().timestamp() - start;
+                                let progress_str = if attacks_total > 0 {
+                                    format!(" [{}/{}]", attacks_done + 1, attacks_total)
+                                } else {
+                                    String::new()
+                                };
+                                // Stage ETA: current attack ETA (from hashcat) + avg * future attacks
+                                let stage_eta = if current_attack_eta > 0 {
+                                    // Have real ETA from hashcat for current attack
+                                    let future_eta = if attacks_done > 0 && last_completion_ts > *start {
+                                        let avg = (last_completion_ts - start) as f64 / attacks_done as f64;
+                                        let future = attacks_total.saturating_sub(attacks_done + 1);
+                                        (avg * future as f64) as i64
+                                    } else { 0 };
+                                    let total_remaining = current_attack_eta + future_eta;
+                                    format!(", ~{}left", format_duration_short(total_remaining))
+                                } else if attacks_total > 0 {
+                                    ", calculating...".to_string()
+                                } else {
+                                    String::new()
+                                };
+                                format!("  ({}elapsed{}{})", format_duration_short(elapsed), progress_str, stage_eta)
+                            } else {
+                                String::new()
+                            }
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
+
+                    let style = if s.overall_status == "Finished" {
+                        Style::default().fg(Color::Green)
+                    } else if is_current {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else if is_done {
+                        Style::default().fg(Color::DarkGray)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    Row::new(vec![format!("{}{}{}", indicator, entry, timing)]).style(style)
                 }).collect();
                 let widths = [Constraint::Percentage(100)];
+                let title = format!(" Cascade Strategy ({} stages) ", s.cascade_plan.len());
                 let table = Table::new(rows, widths)
-                    .header(Row::new(vec!["Wordlist Path (sorted by size)"]).style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
-                    .block(Block::default().title(format!(" Discovered Wordlists ({}) ", s.discovered_wordlists.len())).borders(Borders::ALL).border_type(BorderType::Rounded));
+                    .header(Row::new(vec!["  Attack Plan"]).style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)))
+                    .block(Block::default().title(title).borders(Borders::ALL).border_type(BorderType::Rounded));
                 f.render_widget(table, chunks[1]);
             }
         },
         _ => {}
     }
 
-    let footer = Paragraph::new(" [1-5/Tab/Shift-Tab] Tabs | [/] Search | [E] Export | [Q/Ctrl+C] Quit | [?] Help | [S] Save ")
+    let footer = Paragraph::new(" [1-5/Tab] Tabs | [P] Pause | [S] Skip Stage | [/] Search | [E] Export | [?] Help | [Q] Quit ")
         .style(Style::default().fg(Color::DarkGray)).alignment(Alignment::Center);
     f.render_widget(footer, chunks[2]);
 
@@ -189,11 +308,14 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
             Line::from("1-5        : Navigate interface tabs"),
             Line::from("Tab/S-Tab  : Cycle tabs forward/backward"),
             Line::from("/          : Search recovered hashes (on Recovered tab)"),
+            Line::from("P          : Pause / Resume cracking (between attacks)"),
+            Line::from("S          : Skip current cascade stage (advance to next)"),
             Line::from("E          : Export recovered hashes to crack-ng-export.csv"),
-            Line::from("S          : Force save current session to ~/.crack-ng/sessions/"),
             Line::from("?          : Toggle this help menu"),
             Line::from(""),
             Line::from(Span::styled("Advanced Features", Style::default().add_modifier(Modifier::BOLD))),
+            Line::from("Positional args  : crack-ng hashes.txt wordlist.txt (like hashcat)"),
+            Line::from("--identify       : Identify hash types and exit (no cracking)."),
             Line::from("--session <name> : Saves job queue and cracked passwords to disk incrementally."),
             Line::from("--resume <name>  : Skips hash parsing and instantly resumes a saved queue."),
             Line::from("--export <file>  : Auto-dumps Recovered Database to JSON or CSV on exit."),
@@ -201,6 +323,7 @@ pub fn draw_main_ui(f: &mut Frame, s: &CrackState, session_name: &Option<String>
             Line::from("--cascade        : Smart attack cascade (wordlist -> rules -> masks -> brute)."),
             Line::from("--format <type>  : Input format: auto, ntds, shadow, kerberoast, asrep, responder."),
             Line::from("--report <path>  : Generate HTML post-crack report on exit."),
+            Line::from("Auto-optimization: GPU workload + optimized kernels applied automatically."),
         ])
         .block(Block::default().title(" Help & Operations ").borders(Borders::ALL).border_type(BorderType::Double).style(Style::default().fg(Color::Yellow)));
         f.render_widget(help, area);
@@ -212,13 +335,25 @@ struct SessionInfo {
     jobs: usize,
     recovered: usize,
     algos: String,
-    path: PathBuf,
 }
 
 fn detect_tool(name: &str) -> (bool, String) {
-    match std::process::Command::new("which").arg(name).output() {
-        Ok(out) if out.status.success() => {
-            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // Probe directly -- avoids shell and works on all POSIX systems
+    match std::process::Command::new(name)
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+    {
+        Ok(s) if s.success() => {
+            // Resolve path via which (safe: name is always a hardcoded literal)
+            let path = std::process::Command::new("which")
+                .arg(name)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_else(|| name.to_string());
             (true, path)
         }
         _ => (false, "not found".to_string()),
@@ -265,7 +400,6 @@ fn load_sessions() -> Vec<SessionInfo> {
                         jobs: state.jobs.len(),
                         recovered: state.recovered.len(),
                         algos: if algos.is_empty() { "-".into() } else { algos.join(", ") },
-                        path: json_path,
                     });
                 }
             }
@@ -276,12 +410,25 @@ fn load_sessions() -> Vec<SessionInfo> {
 
 fn load_all_recovered() -> Vec<ExportRecord> {
     let mut all: Vec<ExportRecord> = Vec::new();
-    for si in &load_sessions() {
-        if let Ok(json) = fs::read_to_string(&si.path) {
-            if let Ok(state) = serde_json::from_str::<CrackState>(&json) {
-                for r in state.recovered {
-                    if !all.iter().any(|e| e.hash == r.hash) {
-                        all.push(r);
+    let mut seen = std::collections::HashSet::new();
+    let session_dir = get_session_dir();
+    if let Ok(entries) = fs::read_dir(&session_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let json_path = if p.is_dir() {
+                let candidate = p.join("session.json");
+                if candidate.exists() { candidate } else { continue }
+            } else if p.extension().unwrap_or_default() == "json" {
+                p.clone()
+            } else {
+                continue
+            };
+            if let Ok(json) = fs::read_to_string(&json_path) {
+                if let Ok(state) = serde_json::from_str::<CrackState>(&json) {
+                    for r in state.recovered {
+                        if seen.insert(r.hash.clone()) {
+                            all.push(r);
+                        }
                     }
                 }
             }
@@ -313,7 +460,27 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
 
     let total_recovered = all_recovered.len();
 
+    // Install panic hook to restore terminal on crash
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(std::io::stdout(), LeaveAlternateScreen);
+        original_hook(info);
+    }));
+
     enable_raw_mode()?;
+
+    struct TermGuard(bool);
+    impl Drop for TermGuard {
+        fn drop(&mut self) {
+            if !self.0 {
+                let _ = disable_raw_mode();
+                let _ = execute!(std::io::stdout(), LeaveAlternateScreen);
+            }
+        }
+    }
+    let mut _term_guard = TermGuard(false);
+
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = ratatui::backend::CrosstermBackend::new(stdout);
@@ -324,6 +491,7 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
     let mut recovered_scroll: usize = 0;
     let mut show_help = false;
     let mut search_query = String::new();
+    let mut status_msg: Option<String> = None;
     let mut search_active = false;
 
     loop {
@@ -334,15 +502,15 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
                 .constraints([Constraint::Length(3), Constraint::Min(10), Constraint::Length(1)].as_ref())
                 .split(size);
 
-            let tab_titles = vec![
-                format!(" [1] Home "),
+            let tab_titles = [
+                " [1] Home ".to_string(),
                 format!(" [2] Sessions ({}) ", sessions.len()),
                 format!(" [3] Recovered ({}) ", total_recovered),
             ];
             let tabs = Tabs::new(tab_titles.iter().cloned().map(Line::from).collect::<Vec<_>>())
                 .select(active_tab)
                 .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)
-                    .title(" crack-ng v2.0 -- Hash Cracking Orchestrator ")
+                    .title(" crack-ng v1.0.0 -- Hash Cracking Orchestrator")
                     .title_alignment(Alignment::Center))
                 .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
                 .divider(Span::raw("|"));
@@ -398,13 +566,16 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
                         Line::from(Span::styled("  Quick Start", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
                         Line::from(""),
                         Line::from(vec![Span::styled("  Crack a file:", Style::default().fg(Color::DarkGray))]),
-                        Line::from(Span::styled("    crack-ng -H hashes.txt", Style::default().fg(Color::Cyan))),
+                        Line::from(Span::styled("    crack-ng hashes.txt rockyou.txt", Style::default().fg(Color::Cyan))),
                         Line::from(""),
-                        Line::from(vec![Span::styled("  NTDS dump:", Style::default().fg(Color::DarkGray))]),
-                        Line::from(Span::styled("    crack-ng -H ntds.txt --format ntds", Style::default().fg(Color::Cyan))),
+                        Line::from(vec![Span::styled("  Identify hashes:", Style::default().fg(Color::DarkGray))]),
+                        Line::from(Span::styled("    crack-ng --identify hashes.txt", Style::default().fg(Color::Cyan))),
                         Line::from(""),
                         Line::from(vec![Span::styled("  Smart cascade:", Style::default().fg(Color::DarkGray))]),
-                        Line::from(Span::styled("    crack-ng -H hashes.txt --cascade", Style::default().fg(Color::Cyan))),
+                        Line::from(Span::styled("    crack-ng hashes.txt --cascade", Style::default().fg(Color::Cyan))),
+                        Line::from(""),
+                        Line::from(vec![Span::styled("  NTDS dump:", Style::default().fg(Color::DarkGray))]),
+                        Line::from(Span::styled("    crack-ng ntds.txt --format ntds", Style::default().fg(Color::Cyan))),
                         Line::from(""),
                         Line::from(vec![Span::styled("  Resume session:", Style::default().fg(Color::DarkGray))]),
                         Line::from(Span::styled("    crack-ng --resume <name>", Style::default().fg(Color::Cyan))),
@@ -502,8 +673,17 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
                 _ => {}
             }
 
-            let footer = Paragraph::new(" [1-3/Tab/Shift-Tab] Tabs | [/] Search | [Up/Down] Navigate | [E] Export | [?] Help | [Q] Quit ")
-                .style(Style::default().fg(Color::DarkGray)).alignment(Alignment::Center);
+            let footer_text = if let Some(msg) = &status_msg {
+                msg.clone()
+            } else {
+                " [1-3/Tab/Shift-Tab] Tabs | [/] Search | [Up/Down] Navigate | [E] Export | [?] Help | [Q] Quit ".to_string()
+            };
+            let footer_style = if status_msg.is_some() {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let footer = Paragraph::new(footer_text).style(footer_style).alignment(Alignment::Center);
             f.render_widget(footer, chunks[2]);
 
             if show_help {
@@ -534,6 +714,9 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
 
         if event::poll(std::time::Duration::from_millis(150))? {
             if let Event::Key(key) = event::read()? {
+                // Clear status message on any keypress
+                status_msg = None;
+
                 if show_help {
                     show_help = false;
                     continue;
@@ -553,9 +736,6 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
                         KeyCode::Backspace => {
                             search_query.pop();
                             recovered_scroll = 0;
-                            if search_query.is_empty() {
-                                search_active = false;
-                            }
                         }
                         KeyCode::Char(c) => {
                             search_query.push(c);
@@ -593,7 +773,11 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
                     KeyCode::Char('2') => active_tab = 1,
                     KeyCode::Char('3') => active_tab = 2,
                     KeyCode::Char('e') | KeyCode::Char('E') => {
-                        let _ = export_results(&PathBuf::from("crack-ng-export.csv"), &all_recovered);
+                        let path = PathBuf::from("crack-ng-export.csv");
+                        match export_results(&path, &all_recovered) {
+                            Ok(_) => status_msg = Some(format!(" [+] Exported {} hashes to {} ", all_recovered.len(), path.display())),
+                            Err(e) => status_msg = Some(format!(" [!] Export failed: {} ", e)),
+                        }
                     }
                     KeyCode::Up => {
                         if active_tab == 1 && session_idx > 0 { session_idx -= 1; }
@@ -615,6 +799,7 @@ pub async fn run_db_viewer(no_tui: bool, export_path: &Option<PathBuf>) -> Resul
         }
     }
 
+    _term_guard.0 = true;
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;

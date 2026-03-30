@@ -1,4 +1,3 @@
-use crate::mask::analyze_cracked_passwords;
 use crate::state::CrackState;
 use std::collections::HashMap;
 
@@ -13,6 +12,8 @@ pub struct CrackReport {
     pub top_masks: Vec<(String, usize)>,
     pub policy_compliance: PolicyStats,
     pub duration: std::time::Duration,
+    /// Active job ETA (None when finished or no active job)
+    pub eta: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +49,8 @@ pub fn generate_report(state: &CrackState) -> CrackReport {
     };
 
     let duration = if let Some(start) = state.start_time {
-        let elapsed = chrono::Local::now().timestamp() - start;
+        let end = state.end_time.unwrap_or_else(|| chrono::Local::now().timestamp());
+        let elapsed = end - start;
         std::time::Duration::from_secs(elapsed.max(0) as u64)
     } else {
         std::time::Duration::from_secs(0)
@@ -101,6 +103,58 @@ pub fn generate_report(state: &CrackState) -> CrackReport {
     // Policy compliance
     let policy_compliance = compute_policy_stats(&plaintexts);
 
+    // Stage ETA: hashcat's current attack ETA + avg * future attacks
+    let eta = if state.overall_status != "Finished" {
+        let (done, total, last_ts) = state.stage_attack_progress;
+        let current_eta = state.active_job_idx
+            .and_then(|idx| state.jobs.get(idx))
+            .map(|j| j.eta_seconds)
+            .unwrap_or(0);
+        let stage_start = state.stage_times.iter()
+            .rposition(|t| t.0 > 0 && t.1.is_none())
+            .and_then(|idx| state.stage_times.get(idx))
+            .map(|t| t.0);
+
+        if let Some(start) = stage_start {
+            let remaining = if current_eta > 0 {
+                // Have real ETA from hashcat -- use it + avg for future attacks
+                let future_eta = if done > 0 && last_ts > start {
+                    let avg = (last_ts - start) as f64 / done as f64;
+                    let future = total.saturating_sub(done + 1) as f64;
+                    (avg * future) as i64
+                } else { 0 };
+                current_eta + future_eta
+            } else if done > 0 && total > done && last_ts > start {
+                // No hashcat ETA -- use avg with real-time countdown
+                let now = chrono::Local::now().timestamp();
+                let avg = (last_ts - start) as f64 / done as f64;
+                let remaining_attacks = (total - done) as f64;
+                let time_into = (now - last_ts) as f64;
+                (avg * remaining_attacks - time_into).max(0.0) as i64
+            } else {
+                0
+            };
+            if remaining > 0 {
+                let h = remaining / 3600;
+                let m = (remaining % 3600) / 60;
+                let s = remaining % 60;
+                if total > 0 {
+                    Some(format!("{:02}:{:02}:{:02} (attack {}/{})", h, m, s, done + 1, total))
+                } else {
+                    Some(format!("{:02}:{:02}:{:02}", h, m, s))
+                }
+            } else if total > 0 && done < total {
+                Some(format!("calculating... (attack {}/{})", done + 1, total))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     CrackReport {
         total_hashes,
         total_cracked,
@@ -111,6 +165,7 @@ pub fn generate_report(state: &CrackState) -> CrackReport {
         top_masks,
         policy_compliance,
         duration,
+        eta,
     }
 }
 
@@ -143,8 +198,6 @@ fn compute_base_words(plaintexts: &[String]) -> Vec<(String, usize)> {
 }
 
 fn compute_mask_frequency(plaintexts: &[String]) -> Vec<(String, usize)> {
-    let masks = analyze_cracked_passwords(plaintexts);
-    // Re-count actual frequency
     let mut freq: HashMap<String, usize> = HashMap::new();
     for pw in plaintexts {
         let mask = pw
@@ -166,8 +219,6 @@ fn compute_mask_frequency(plaintexts: &[String]) -> Vec<(String, usize)> {
     let mut sorted: Vec<(String, usize)> = freq.into_iter().collect();
     sorted.sort_by(|a, b| b.1.cmp(&a.1));
     sorted.truncate(15);
-    // Make sure masks from analyze_cracked_passwords are also returned for cascade use
-    let _ = masks;
     sorted
 }
 
@@ -231,6 +282,14 @@ fn compute_policy_stats(plaintexts: &[String]) -> PolicyStats {
     }
 }
 
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 pub fn render_html(report: &CrackReport) -> String {
     let mut html = String::new();
 
@@ -242,10 +301,12 @@ pub fn render_html(report: &CrackReport) -> String {
     // Header
     html.push_str("<div class=\"container\">\n");
     html.push_str("<h1>crack-ng Password Audit Report</h1>\n");
+    let eta_str = report.eta.as_ref().map(|e| format!(" | ETA: {}", e)).unwrap_or_default();
     html.push_str(&format!(
-        "<p class=\"meta\">Generated: {} | Duration: {}s</p>\n",
+        "<p class=\"meta\">Generated: {} | Duration: {}s{}</p>\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-        report.duration.as_secs()
+        report.duration.as_secs(),
+        eta_str
     ));
 
     // Summary box
@@ -273,7 +334,7 @@ pub fn render_html(report: &CrackReport) -> String {
         let bar_width = (algo.rate * 2.0).min(200.0);
         html.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.1}%</td><td><div class=\"bar\" style=\"width:{}px\"></div></td></tr>\n",
-            algo.name, algo.total, algo.cracked, algo.rate, bar_width));
+            html_escape(&algo.name), algo.total, algo.cracked, algo.rate, bar_width));
     }
     html.push_str("</table>\n");
 
@@ -296,7 +357,7 @@ pub fn render_html(report: &CrackReport) -> String {
     // Top base words
     html.push_str("<h2>Top Base Words</h2>\n<table>\n<tr><th>Word</th><th>Count</th></tr>\n");
     for (word, count) in &report.top_base_words {
-        html.push_str(&format!("<tr><td>{}</td><td>{}</td></tr>\n", word, count));
+        html.push_str(&format!("<tr><td>{}</td><td>{}</td></tr>\n", html_escape(word), count));
     }
     html.push_str("</table>\n");
 
@@ -307,7 +368,7 @@ pub fn render_html(report: &CrackReport) -> String {
     for (mask, count) in &report.top_masks {
         html.push_str(&format!(
             "<tr><td><code>{}</code></td><td>{}</td></tr>\n",
-            mask, count
+            html_escape(mask), count
         ));
     }
     html.push_str("</table>\n");
@@ -352,6 +413,9 @@ pub fn render_text(report: &CrackReport) -> String {
         "=".repeat(40)
     ));
     out.push_str(&format!("Duration:      {}s\n", report.duration.as_secs()));
+    if let Some(eta) = &report.eta {
+        out.push_str(&format!("ETA:           {}\n", eta));
+    }
     out.push_str(&format!("Total Hashes:  {}\n", report.total_hashes));
     out.push_str(&format!("Cracked:       {}\n", report.total_cracked));
     out.push_str(&format!("Crack Rate:    {:.1}%\n\n", report.crack_rate));
