@@ -1,0 +1,5 @@
+/target
+*.cjs
+.env
+.claude/
+CLAUDE.md
