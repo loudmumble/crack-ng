@@ -3,3 +3,7 @@
 .env
 .claude/
 CLAUDE.md
+.opencode/
+.sisyphus/
+MANUALTESTING.md
+VERIFICATION_LEDGER.md
