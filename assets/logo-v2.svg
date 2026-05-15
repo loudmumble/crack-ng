@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="hashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f38ba8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fab387;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Digital rain background -->
+  <rect width="400" height="400" fill="#11111b"/>
+  
+  <!-- Binary code rain -->
+  <g fill="#a6e3a1" font-family="monospace" font-size="10" opacity="0.15">
+    <text x="30" y="50">01001000</text>
+    <text x="30" y="70">10110101</text>
+    <text x="30" y="90">01101001</text>
+    <text x="130" y="60">11010010</text>
+    <text x="130" y="80">01001101</text>
+    <text x="130" y="100">10110010</text>
+    <text x="270" y="55">01101101</text>
+    <text x="270" y="75">10010110</text>
+    <text x="270" y="95">01011001</text>
+    <text x="350" y="50">11001010</text>
+    <text x="350" y="70">01010111</text>
+    <text x="350" y="90">10101010</text>
+  </g>
+  
+  <!-- Central lock (digital style) -->
+  <g transform="translate(200, 180)">
+    <!-- Lock body -->
+    <rect x="-35" y="-10" width="70" height="55" rx="5" fill="none" stroke="url(#hashGrad)" stroke-width="3"/>
+    
+    <!-- Digital shackle -->
+    <path d="M-20 -10 L-20 -30 Q-20 -50 0 -50 Q20 -50 20 -30 L20 -10" 
+          fill="none" stroke="url(#hashGrad)" stroke-width="3" stroke-dasharray="5,3"/>
+    
+    <!-- Keyhole as hash symbol -->
+    <g transform="translate(0, 15)">
+      <rect x="-2" y="-12" width="4" height="24" fill="url(#hashGrad)"/>
+      <rect x="-12" y="-2" width="24" height="4" fill="url(#hashGrad)"/>
+      <rect x="-12" y="6" width="24" height="4" fill="url(#hashGrad)"/>
+    </g>
+  </g>
+  
+  <!-- Cracking progress bars -->
+  <g transform="translate(80, 280)">
+    <text x="0" y="0" fill="#6c7086" font-family="monospace" font-size="8">MD5:</text>
+    <rect x="40" y="-8" width="80" height="6" fill="#1e1e2e"/>
+    <rect x="40" y="-8" width="60" height="6" fill="#a6e3a1"/>
+    
+    <text x="0" y="20" fill="#6c7086" font-family="monospace" font-size="8">SHA256:</text>
+    <rect x="55" y="12" width="80" height="6" fill="#1e1e2e"/>
+    <rect x="55" y="12" width="40" height="6" fill="#f9e2af"/>
+    
+    <text x="0" y="40" fill="#6c7086" font-family="monospace" font-size="8">NTLM:</text>
+    <rect x="45" y="32" width="80" height="6" fill="#1e1e2e"/>
+    <rect x="45" y="32" width="75" height="6" fill="#f38ba8"/>
+  </g>
+  
+  <!-- GPU utilization meters -->
+  <g transform="translate(240, 280)">
+    <text x="0" y="0" fill="#6c7086" font-family="monospace" font-size="8">GPU:</text>
+    <rect x="35" y="-8" width="4" height="20" fill="#1e1e2e"/>
+    <rect x="35" y="2" width="4" height="10" fill="#a6e3a1"/>
+    <rect x="42" y="-8" width="4" height="20" fill="#1e1e2e"/>
+    <rect x="42" y="-2" width="4" height="14" fill="#a6e3a1"/>
+    <rect x="49" y="-8" width="4" height="20" fill="#1e1e2e"/>
+    <rect x="49" y="-5" width="4" height="17" fill="#f9e2af"/>
+    <rect x="56" y="-8" width="4" height="20" fill="#1e1e2e"/>
+    <rect x="56" y="-8" width="4" height="20" fill="#f38ba8"/>
+  </g>
+  
+  <!-- Speed lines -->
+  <g stroke="#f9e2af" stroke-width="1" opacity="0.4">
+    <line x1="50" y1="180" x2="120" y2="180"/>
+    <line x1="280" y1="180" x2="350" y2="180"/>
+    <line x1="200" y1="80" x2="200" y2="120"/>
+    <line x1="200" y1="240" x2="200" y2="280"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="200" y="365" text-anchor="middle" fill="#f38ba8" font-family="monospace" font-size="32" font-weight="bold" letter-spacing="3">CRACK-NG</text>
+  <text x="200" y="390" text-anchor="middle" fill="#45475a" font-family="monospace" font-size="8" letter-spacing="2">HASHCAT + JOHN THE RIPPER</text>
+</svg>

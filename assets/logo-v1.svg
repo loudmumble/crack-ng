@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="metalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9e2af;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#fab387;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#eba0ac;stop-opacity:1" />
+    </linearGradient>
+    <filter id="metalShine">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Dark metallic background -->
+  <rect width="400" height="400" fill="#11111b"/>
+  
+  <!-- Scratched metal texture -->
+  <g stroke="#1e1e2e" stroke-width="0.5" opacity="0.3">
+    <line x1="50" y1="50" x2="100" y2="60"/>
+    <line x1="300" y1="80" x2="350" y2="90"/>
+    <line x1="100" y1="300" x2="150" y2="310"/>
+    <line x1="250" y1="320" x2="300" y2="330"/>
+  </g>
+  
+  <!-- Giant hammer -->
+  <g transform="translate(200, 180) rotate(-45)">
+    <!-- Handle -->
+    <rect x="-8" y="-120" width="16" height="100" fill="#8b6914" rx="3"/>
+    
+    <!-- Head -->
+    <rect x="-30" y="-140" width="60" height="35" fill="url(#metalGrad)" filter="url(#metalShine)" rx="5"/>
+    
+    <!-- Impact lines -->
+    <g stroke="#f38ba8" stroke-width="3" opacity="0.8">
+      <line x1="-40" y1="-120" x2="-60" y2="-120"/>
+      <line x1="40" y1="-120" x2="60" y2="-120"/>
+      <line x1="0" y1="-150" x2="0" y2="-170"/>
+    </g>
+  </g>
+  
+  <!-- Broken lock fragments -->
+  <g fill="#45475a" stroke="#f9e2af" stroke-width="1">
+    <polygon points="200,280 220,260 240,280 220,300"/>
+    <polygon points="160,290 180,270 200,290"/>
+    <polygon points="240,270 260,250 280,270 260,290"/>
+    <polygon points="140,310 160,290 180,310"/>
+    <polygon points="260,300 280,280 300,300"/>
+  </g>
+  
+  <!-- Flying sparks -->
+  <g fill="#f9e2af" filter="url(#metalShine)">
+    <circle cx="150" cy="200" r="3">
+      <animate attributeName="cx" values="150;100" dur="0.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="200;180" dur="0.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="1;0" dur="0.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="250" cy="200" r="2">
+      <animate attributeName="cx" values="250;300" dur="0.4s" begin="0.1s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="200;190" dur="0.4s" begin="0.1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="1;0" dur="0.4s" begin="0.1s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="200" cy="180" r="2.5">
+      <animate attributeName="cy" values="180;140" dur="0.6s" begin="0.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="1;0" dur="0.6s" begin="0.2s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Hash symbols floating -->
+  <g fill="#6c7086" font-family="monospace" font-size="16" opacity="0.4">
+    <text x="80" y="150">#</text>
+    <text x="320" y="150">#</text>
+    <text x="80" y="350">#</text>
+    <text x="320" y="350">#</text>
+    <text x="60" y="250">$</text>
+    <text x="340" y="250">%</text>
+  </g>
+  
+  <!-- Text -->
+  <text x="200" y="370" text-anchor="middle" fill="#f9e2af" font-family="monospace" font-size="28" font-weight="bold" letter-spacing="2">CRACK-NG</text>
+  <text x="200" y="395" text-anchor="middle" fill="#6c7086" font-family="monospace" font-size="9" letter-spacing="2">HASH BREAKER</text>
+</svg>

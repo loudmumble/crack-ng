@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="lockGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f9e2af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fab387;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="crackGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f38ba8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#eba0ac;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <circle cx="200" cy="200" r="180" fill="#181825" stroke="#313244" stroke-width="2"/>
+  
+  <!-- Lock body -->
+  <rect x="140" y="180" width="120" height="100" rx="10" fill="url(#lockGrad)" stroke="#f9e2af" stroke-width="2"/>
+  
+  <!-- Lock shackle (broken) -->
+  <path d="M160 180 L160 140 Q160 100 200 100 Q240 100 240 140 L240 180" 
+        fill="none" stroke="#f9e2af" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Crack lines -->
+  <g stroke="url(#crackGrad)" stroke-width="3" fill="none" filter="url(#glow)">
+    <path d="M180 140 L190 160 L185 180 L195 200"/>
+    <path d="M220 140 L210 160 L215 180 L205 200"/>
+    <path d="M195 200 L200 220 L205 200"/>
+  </g>
+  
+  <!-- Lightning bolts (representing speed) -->
+  <g fill="#f38ba8" opacity="0.9">
+    <polygon points="120,120 130,140 125,140 135,160 120,145 125,145"/>
+    <polygon points="280,120 270,140 275,140 265,160 280,145 275,145"/>
+  </g>
+  
+  <!-- Hash symbols -->
+  <g fill="#cdd6f4" font-family="monospace" font-size="16" opacity="0.6">
+    <text x="100" y="200">#</text>
+    <text x="300" y="200">#</text>
+    <text x="100" y="250">#</text>
+    <text x="300" y="250">#</text>
+  </g>
+  
+  <!-- Keyhole -->
+  <circle cx="200" cy="220" r="12" fill="#181825"/>
+  <rect x="197" y="220" width="6" height="20" fill="#181825"/>
+  
+  <!-- Text: CRACK-NG -->
+  <text x="200" y="330" text-anchor="middle" fill="#f9e2af" font-family="monospace" font-size="28" font-weight="bold" letter-spacing="3">CRACK-NG</text>
+  
+  <!-- Subtitle -->
+  <text x="200" y="355" text-anchor="middle" fill="#6c7086" font-family="monospace" font-size="10" letter-spacing="2">HASH CRACKING</text>
+</svg>

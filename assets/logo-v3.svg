@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="neonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f38ba8;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f9e2af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a6e3a1;stop-opacity:1" />
+    </linearGradient>
+    <filter id="neonGlow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Retro arcade background -->
+  <rect width="400" height="400" fill="#11111b"/>
+  
+  <!-- Scanlines -->
+  <g stroke="#1e1e2e" stroke-width="1" opacity="0.3">
+    <line x1="0" y1="10" x2="400" y2="10"/>
+    <line x1="0" y1="30" x2="400" y2="30"/>
+    <line x1="0" y1="50" x2="400" y2="50"/>
+    <line x1="0" y1="70" x2="400" y2="70"/>
+    <line x1="0" y1="90" x2="400" y2="90"/>
+    <line x1="0" y1="110" x2="400" y2="110"/>
+    <line x1="0" y1="130" x2="400" y2="130"/>
+    <line x1="0" y1="150" x2="400" y2="150"/>
+    <line x1="0" y1="170" x2="400" y2="170"/>
+    <line x1="0" y1="190" x2="400" y2="190"/>
+    <line x1="0" y1="210" x2="400" y2="210"/>
+    <line x1="0" y1="230" x2="400" y2="230"/>
+    <line x1="0" y1="250" x2="400" y2="250"/>
+    <line x1="0" y1="270" x2="400" y2="270"/>
+    <line x1="0" y1="290" x2="400" y2="290"/>
+    <line x1="0" y1="310" x2="400" y2="310"/>
+    <line x1="0" y1="330" x2="400" y2="330"/>
+    <line x1="0" y1="350" x2="400" y2="350"/>
+    <line x1="0" y1="370" x2="400" y2="370"/>
+    <line x1="0" y1="390" x2="400" y2="390"/>
+  </g>
+  
+  <!-- Pixel art lock -->
+  <g transform="translate(200, 160)">
+    <!-- Lock body (8-bit style) -->
+    <rect x="-32" y="-8" width="64" height="48" fill="#f9e2af" stroke="#1e1e2e" stroke-width="2"/>
+    <rect x="-28" y="-4" width="56" height="40" fill="#fab387"/>
+    
+    <!-- Pixel shackle -->
+    <rect x="-20" y="-8" width="8" height="16" fill="#f9e2af" stroke="#1e1e2e" stroke-width="2"/>
+    <rect x="-20" y="-24" width="40" height="8" fill="#f9e2af" stroke="#1e1e2e" stroke-width="2"/>
+    <rect x="12" y="-8" width="8" height="16" fill="#f9e2af" stroke="#1e1e2e" stroke-width="2"/>
+    
+    <!-- Keyhole -->
+    <circle cx="0" cy="12" r="8" fill="#1e1e2e"/>
+    <rect x="-3" y="12" width="6" height="12" fill="#1e1e2e"/>
+  </g>
+  
+  <!-- Pixel crack effect -->
+  <g fill="#f38ba8">
+    <rect x="185" y="140" width="4" height="4"/>
+    <rect x="181" y="148" width="4" height="4"/>
+    <rect x="189" y="152" width="4" height="4"/>
+    <rect x="177" y="156" width="4" height="4"/>
+    <rect x="193" y="160" width="4" height="4"/>
+    <rect x="173" y="164" width="4" height="4"/>
+    <rect x="197" y="168" width="4" height="4"/>
+    <rect x="169" y="172" width="4" height="4"/>
+    <rect x="201" y="172" width="4" height="4"/>
+  </g>
+  
+  <!-- Score display -->
+  <g transform="translate(100, 250)">
+    <text x="0" y="0" fill="#6c7086" font-family="monospace" font-size="10">SCORE:</text>
+    <text x="60" y="0" fill="#a6e3a1" font-family="monospace" font-size="12" filter="url(#neonGlow)">0042891</text>
+  </g>
+  
+  <!-- Lives display -->
+  <g transform="translate(250, 250)">
+    <text x="0" y="0" fill="#6c7086" font-family="monospace" font-size="10">LIVES:</text>
+    <g fill="#f38ba8" transform="translate(55, -5)">
+      <polygon points="0,5 5,0 10,5 5,10"/>
+      <polygon points="15,5 20,0 25,5 20,10"/>
+      <polygon points="30,5 35,0 40,5 35,10"/>
+    </g>
+  </g>
+  
+  <!-- Power-up indicators -->
+  <g transform="translate(100, 290)">
+    <text x="0" y="0" fill="#6c7086" font-family="monospace" font-size="8">HASHCAT:</text>
+    <rect x="65" y="-6" width="50" height="8" fill="#1e1e2e"/>
+    <rect x="65" y="-6" width="45" height="8" fill="#a6e3a1"/>
+    
+    <text x="0" y="18" fill="#6c7086" font-family="monospace" font-size="8">JOHN:</text>
+    <rect x="45" y="12" width="50" height="8" fill="#1e1e2e"/>
+    <rect x="45" y="12" width="35" height="8" fill="#f9e2af"/>
+  </g>
+  
+  <!-- Insert coin text -->
+  <text x="200" y="340" text-anchor="middle" fill="#f9e2af" font-family="monospace" font-size="12" filter="url(#neonGlow)">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1s" repeatCount="indefinite"/>
+    INSERT COIN TO CRACK
+  </text>
+  
+  <!-- Text -->
+  <text x="200" y="380" text-anchor="middle" fill="url(#neonGrad)" font-family="monospace" font-size="28" font-weight="bold" letter-spacing="2" filter="url(#neonGlow)">CRACK-NG</text>
+</svg>
